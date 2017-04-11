@@ -1,0 +1,6 @@
+#!/bin/bash
+
+source /etc/backup.conf
+
+echo $FTP_PASSWORD
+ftp $FTP_SERVER

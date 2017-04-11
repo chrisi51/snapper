@@ -1,0 +1,41 @@
+#!/bin/bash
+
+
+
+	OIFS=$IFS
+
+	lvscantext=`/sbin/lvscan`
+	datum="$(date +%Y-%m-%d)"
+	datumzeit="$(date +%Y-%m-%d-%H-%M-%S)"
+	PROBLEM="false"
+	IFS=$'\n'
+
+	i=0
+
+	for zeile in $lvscantext
+	do
+	        i=$[$i+1]
+#	        echo $zeile
+	        ACTIVE=`echo $zeile | awk -v FS=" " '{print $1}'`
+	        LV=`echo $zeile | awk -v FS="'" '{print $2}'`
+		echo "LV: $LV"
+	        LVname=`echo $LV | sed "s:/:_:g" | sed "s:_::"`
+		echo "LVname: $LVname"
+	        LVname=`echo $LV | awk -v FS="/" '{print $NF}'`
+		LVnamerev=`echo $LVname | rev`
+                echo "LVname: $LVname"
+		echo "LVnamerev: $LVnamerev"
+	        VGname=`echo $LV | rev | sed "s:${LVnamerev}/::" | rev`
+                echo "VGname: $VGname"
+	        Kapazitaet=`echo $zeile | awk -v FS="[" '{print $2}' | awk -v FS=" " '{print $1}'`
+		Kapazitaet=$(echo "$Kapazitaet/10" | bc )
+
+	        if [ $ACTIVE == "ACTIVE" ];
+	        then
+        	        echo "$i $ACTIVE --- > LV: $LV, Kapazitaet: $Kapazitaet, LVName: $LVname, VGName: $VGname"
+	        else
+                        echo "Übersprung ... $i $ACTIVE --- > LV: $LV, Kapazitaet: $Kapazitaet, LVName: $LVname, VGName: $VGname"
+		fi
+	done
+
+	IFS=$OIFS

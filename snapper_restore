@@ -1,0 +1,7 @@
+#!/bin/bash
+
+source /etc/backup.conf
+
+
+
+$CMD_DUPLICITY restore -t 13D --force  -v 9 ftp://${FTP_USER}@${FTP_SERVER}/vm-images/kleinkunden /srv/storage/backup/images/kleinkunden-restore

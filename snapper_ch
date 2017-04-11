@@ -1,0 +1,109 @@
+#!/bin/bash
+
+source /etc/backup.conf
+
+if test -f $CMD_DUPLICITY;
+then
+
+	echo "" > ${TEMPLOGDATEI}
+
+	OIFS=$IFS
+
+	lvscantext=`/sbin/lvscan`
+	datum="$(date +%Y-%m-%d)"
+	echo $datum > /srv/storage/backup/lastbackup.txt
+	datumzeit="$(date +%Y-%m-%d-%H-%M-%S)"
+	PROBLEM="false"
+	IFS=$'\n'
+
+	i=0
+
+	echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
+	echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
+	echo "----- BACKUP-JOB $datumzeit ------------" >> ${TEMPLOGDATEI} 2>&1
+	echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
+	for zeile in $lvscantext
+	do
+	        i=$[$i+1]
+#	        echo $zeile
+	        ACTIVE=`echo $zeile | awk -v FS=" " '{print $1}'`
+	        LV=`echo $zeile | awk -v FS="'" '{print $2}'`
+	        LVname=`echo $LV | sed "s:/:_:g" | sed "s:_::"`
+	        LVname=`echo $LV | awk -v FS="/" '{print $NF}'`
+                LVnamerev=`echo $LVname | rev`
+	        VGname=`echo $LV | rev | sed "s:${LVnamerev}/::" | rev`
+	        Kapazitaet=`echo $zeile | awk -v FS="[" '{print $2}' | awk -v FS=" " '{print $1}'`
+		Kapazitaet=$(echo "$Kapazitaet/10" | bc )
+
+                if [ $ACTIVE == "ACTIVE" -a ! -e /srv/storage/backup/images/${datum}-${LVname}.img.gz ];
+	        then
+	                echo "Backup $LVname:" >> ${TEMPLOGDATEI} 2>&1
+	                echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
+
+	                echo "=> Loeschen alter Backup-Images" >> ${TEMPLOGDATEI} 2>&1
+	                # Loeschen eventuell vorhandener alter Backup-Images-Zips
+	                rm -f /srv/storage/backup/images/*${LVname}.img.gz > /dev/null
+
+	                echo "=> Anlegen des Snapshots ${LVname}_snap" >> ${TEMPLOGDATEI} 2>&1
+	                # Snapshot der aktuellen VM anlegen
+        	        echo "$i $ACTIVE --- > LV: $LV, Kapazitaet: $Kapazitaet, LVName: $LVname, VGName: $VGname"
+	               `/sbin/lvcreate --size ${Kapazitaet}G --snapshot --name ${LVname}_snap $LV > /dev/null`
+                	sync
+	                sleep 1
+
+	                echo "=> Image ${datum}-${LVname}.img.gz aus Snapshot ${LVname}_snap erstellen" >> ${TEMPLOGDATEI} 2>&1
+	                # Snapshot in ein Image schreiben und einpacken
+	                nice -n19 ionice -c3 /bin/gzip -c < ${VGname}/${LVname}_snap > /srv/storage/backup/images/${datum}-${LVname}.img.gz
+	                sync
+	                sleep 3
+
+	                echo "=> Snapshot ${LVname}_snap entfernen" >> ${TEMPLOGDATEI} 2>&1
+	                # Snapshot nach Imageerstellung wieder loeschen um Speicherplatz freizugeben
+	                /sbin/lvremove -f ${VGname}/${LVname}_snap > /dev/null
+	                sync
+	                sleep 1
+
+	                echo "=> ${SAVETIME} alte Images vom FTP-Server entfernen" >> ${TEMPLOGDATEI} 2>&1
+	                # Loeschen aller Backups, die aelter als ${SAVETIME} sind
+	                $CMD_DUPLICITY remove-older-than ${SAVETIME} --force ftp://${FTP_USER}@${FTP_SERVER}/vm-images/${LVname} >> ${TEMPLOGDATEI} 2>&1
+	                echo "=> aktuelles Image ${datum}-${LVname}.img.gz auf FTP-Server ablegen" >> ${TEMPLOGDATEI} 2>&1
+	                # Woechentliches Full-Backup und taegliches inkrementielles Backup
+	                $CMD_DUPLICITY full --volsize 500 /srv/storage/backup/images/${datum}-${LVname}.img.gz ftp://${FTP_USER}@${FTP_SERVER}/vm-images/${LVname} >> ${TEMPLOGDATEI} 2>&1
+
+	                if [ $? -ne 0 ]; then
+#	                        echo "ERROR eMail an $KONTAKTADRESSE geschickt" >> ${TEMPLOGDATEI} 2>&1
+#	                        $CMD_CAT ${TEMPLOGDATEI} | mail -s "Backup-Fehler auf `hostname`!" $KONTAKTADRESSE
+				PROBLEMVM=`echo ${PROBLEMVM} ${LVname}`
+	                        PROBLEM="true"
+	                fi
+	                echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
+	        fi
+	done
+
+	echo "----- HDD-Use für einzelne Sicherung ------------" >> ${TEMPLOGDATEI} 2>&1
+
+	HDDuseINT=`du -s -B G /srv/storage/backup/images/ | awk -v FS=" " '{print $1}' | sed "s:G::g" | sed "s:M::" | sed "s:B::"`
+        HDDuseREAL=`du -sh /srv/storage/backup/images/ | awk -v FS=" " '{print $1}' | sed "s:G::g" | sed "s:M::" | sed "s:B::"`
+	if [ $HDDuseINT -ge  23 ]; then
+		echo " WARNUNG --- BACKUPS WERDEN ZU GROSS ($HDDuseREAL)" >> ${TEMPLOGDATEI} 2>&1
+#		PROBLEM="true"
+                echo " WARNUNG --- BACKUPS WERDEN ZU GROSS ($HDDuseREAL)" | mail -s "Backups werden zu gross auf `hostname`!" $KONTAKTADRESSE
+	else
+		echo " $HDDuseREAL" >> ${TEMPLOGDATEI} 2>&1
+	fi
+	echo "----- DONE --------------------------------------" >> ${TEMPLOGDATEI} 2>&1
+
+	if [ $PROBLEM != "true" ]; then
+	        echo "SUCCESS eMail an $KONTAKTADRESSE geschickt" >> ${TEMPLOGDATEI} 2>&1
+	        $CMD_CAT ${TEMPLOGDATEI} | mail -s "Backup Erfolgreich auf `hostname`!" $KONTAKTADRESSE
+	else
+		echo "ERROR eMail an $KONTAKTADRESSE geschickt" >> ${TEMPLOGDATEI} 2>&1
+		$CMD_CAT ${TEMPLOGDATEI} | mail -s "Backup-Fehler auf `hostname`!" $KONTAKTADRESSE
+	fi
+	$CMD_CAT ${TEMPLOGDATEI} >> ${LOGDATEI}
+
+	IFS=$OIFS
+else
+	echo "duplicity was not found. please correct path-"
+	echo "duplicity was not found. please correct path-" | mail -s "duplicity not found @ `hostname`!" $KONTAKTADRESSE
+fi

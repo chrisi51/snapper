@@ -1,0 +1,51 @@
+#!/bin/bash
+
+source /etc/backup.conf
+
+if test -f $CMD_DUPLICITY;
+then
+
+	echo ""
+
+	OIFS=$IFS
+
+	lvscantext=`lvscan`
+	datum=`cat /srv/storage/backup/lastbackup.txt`
+	datumzeit="$(date +%Y-%m-%d-%H-%M-%S)"
+	PROBLEM="false"
+	IFS=$'\n'
+
+	i=0
+
+	echo "-------------------------------------------------"
+	echo "-------------------------------------------------"
+	echo "----- BACKUP-JOB $datumzeit ------------"
+	echo "-------------------------------------------------"
+	for zeile in $lvscantext
+	do
+	        i=$[$i+1]
+	        echo $zeile
+	        ACTIVE=`echo $zeile | awk -v FS=" " '{print $1}'`
+	        LV=`echo $zeile | awk -v FS="'" '{print $2}'`
+	        LVname=`echo $LV | sed "s:/:_:g" | sed "s:_::"`
+	        LVname=`echo $LV | awk -v FS="/" '{print $NF}'`
+	        VGname=`echo $LV | sed "s:/${LVname}::"`
+
+	        if [ $ACTIVE == "ACTIVE" ];
+	        then
+	                echo "Backup $LVname:"
+	                echo "-------------------------------------------------"
+
+	                echo "=> Transfer vom Backup"
+	                # Transfer vom Backup
+	                $CMD_DUPLICITY --full-if-older-than 5D -v5 --volsize 500  --allow-source-mismatch /srv/storage/backup/images/${datum}-${LVname}.img.gz ftp://${FTP_USER}@${FTP_SERVER}/vm-images/${LVname}
+
+	                echo "-------------------------------------------------"
+	        fi
+	done
+
+	IFS=$OIFS
+else
+	echo "duplicity was not found. please correct path-"
+	echo "duplicity was not found. please correct path-" | mail -s "duplicity not found @ `hostname`!" $KONTAKTADRESSE
+fi
