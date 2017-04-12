@@ -5,17 +5,24 @@ source /etc/backup.conf
 if test -f $CMD_DUPLICITY;
 then
 
+	if [ ! -d ${BACKUPPATH}images ];
+	then
+		echo "have to create the backup path: ${BACKUPPATH}images";
+		mkdir ${BACKUPPATH}images;
+	fi
+
 	echo "" > ${TEMPLOGDATEI}
 
 	OIFS=$IFS
 
-        EXCLUDE_GREP="| grep -v 'Snapshot'"
-        for i in ${EXCLUDE_LVS[@]}; do
-                EXCLUDE_GREP="$EXCLUDE_GREP | grep -v '$i'"
-        done
+	EXCLUDE_GREP="| grep -v 'Snapshot'"
+	for i in ${EXCLUDE_LVS[@]}; do
+	        EXCLUDE_GREP="$EXCLUDE_GREP | grep -v '$i'"
+	done
 
-        lvscantext=`eval /sbin/lvscan $EXCLUDE_GREP`	datum="$(date +%Y-%m-%d)"
-	echo $datum > /srv/storage/backup/lastbackup.txt
+	lvscantext=`eval /sbin/lvscan $EXCLUDE_GREP`
+	datum="$(date +%Y-%m-%d)"
+	echo $datum > ${BACKUPPATH}lastbackup.txt
 	datumzeit="$(date +%Y-%m-%d-%H-%M-%S)"
 	PROBLEM="false"
 	IFS=$'\n'
@@ -36,23 +43,22 @@ then
 	        LVname=`echo $LV | awk -v FS="/" '{print $NF}'`
                 LVnamerev=`echo $LVname | rev`
 	        VGname=`echo $LV | rev | sed "s:${LVnamerev}/::" | rev`
-                Kapazitaet=`echo $zeile | awk -v FS="[" '{print $2}' | awk -v FS=" " '{print $1}'`
-                echo $Kapazitaet;
-                if [ $(echo "$Kapazitaet > 10" | bc) -eq 1 ];
-                then
-                        Kapazitaet=$(echo "$Kapazitaet/10" | bc );
-                else
-                        Kapazitaet="1";
-                fi
+	        Kapazitaet=`echo $zeile | awk -v FS="[" '{print $2}' | awk -v FS=" " '{print $1}'`
+		if [ $(echo "$Kapazitaet > 10" | bc) -eq 1 ];
+		then
+			Kapazitaet=$(echo "$Kapazitaet/10" | bc );
+		else
+			Kapazitaet="1";
+		fi
 
-                if [ $ACTIVE == "ACTIVE" -a ! -e /srv/storage/backup/images/${datum}-${LVname}.img.gz ];
+                if [ $ACTIVE == "ACTIVE" -a ! -e ${BACKUPPATH}images/${datum}-${LVname}.img.gz ];
 	        then
 	                echo "Backup $LVname:" >> ${TEMPLOGDATEI} 2>&1
 	                echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
 
 	                echo "=> Loeschen alter Backup-Images" >> ${TEMPLOGDATEI} 2>&1
 	                # Loeschen eventuell vorhandener alter Backup-Images-Zips
-	                rm -f /srv/storage/backup/images/*${LVname}.img.gz > /dev/null
+	                rm -f ${BACKUPPATH}images/*${LVname}.img.gz > /dev/null
 
 	                echo "=> Anlegen des Snapshots ${LVname}_snap" >> ${TEMPLOGDATEI} 2>&1
 	                # Snapshot der aktuellen VM anlegen
@@ -63,7 +69,7 @@ then
 
 	                echo "=> Image ${datum}-${LVname}.img.gz aus Snapshot ${LVname}_snap erstellen" >> ${TEMPLOGDATEI} 2>&1
 	                # Snapshot in ein Image schreiben und einpacken
-	                nice -n19 ionice -c3 /usr/bin/pigz -c < ${VGname}/${LVname}_snap > /srv/storage/backup/images/${datum}-${LVname}.img.gz
+	                nice -n19 ionice -c3 /usr/bin/pigz -c < ${VGname}/${LVname}_snap > ${BACKUPPATH}images/${datum}-${LVname}.img.gz
 	                sync
 	                sleep 3
 
@@ -78,7 +84,7 @@ then
 	                $CMD_DUPLICITY remove-older-than ${SAVETIME} --force ftp://${FTP_USER}@${FTP_SERVER}/vm-images/${LVname} >> ${TEMPLOGDATEI} 2>&1
 	                echo "=> aktuelles Image ${datum}-${LVname}.img.gz auf FTP-Server ablegen" >> ${TEMPLOGDATEI} 2>&1
 	                # Woechentliches Full-Backup und taegliches inkrementielles Backup
-	                $CMD_DUPLICITY full --volsize 500 /srv/storage/backup/images/${datum}-${LVname}.img.gz ftp://${FTP_USER}@${FTP_SERVER}/vm-images/${LVname} >> ${TEMPLOGDATEI} 2>&1
+	                $CMD_DUPLICITY full --volsize 500 ${BACKUPPATH}images/${datum}-${LVname}.img.gz ftp://${FTP_USER}@${FTP_SERVER}/vm-images/${LVname} >> ${TEMPLOGDATEI} 2>&1
 
 	                if [ $? -ne 0 ]; then
 #	                        echo "ERROR eMail an $KONTAKTADRESSE geschickt" >> ${TEMPLOGDATEI} 2>&1
