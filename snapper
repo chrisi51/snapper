@@ -9,8 +9,12 @@ then
 
 	OIFS=$IFS
 
-	lvscantext=`/sbin/lvscan`
-	datum="$(date +%Y-%m-%d)"
+        EXCLUDE_GREP="| grep -v 'Snapshot'"
+        for i in ${EXCLUDE_LVS[@]}; do
+                EXCLUDE_GREP="$EXCLUDE_GREP | grep -v '$i'"
+        done
+
+        lvscantext=`eval /sbin/lvscan $EXCLUDE_GREP`	datum="$(date +%Y-%m-%d)"
 	echo $datum > /srv/storage/backup/lastbackup.txt
 	datumzeit="$(date +%Y-%m-%d-%H-%M-%S)"
 	PROBLEM="false"
