@@ -36,8 +36,14 @@ then
 	        LVname=`echo $LV | awk -v FS="/" '{print $NF}'`
                 LVnamerev=`echo $LVname | rev`
 	        VGname=`echo $LV | rev | sed "s:${LVnamerev}/::" | rev`
-	        Kapazitaet=`echo $zeile | awk -v FS="[" '{print $2}' | awk -v FS=" " '{print $1}'`
-		Kapazitaet=$(echo "$Kapazitaet/10" | bc )
+                Kapazitaet=`echo $zeile | awk -v FS="[" '{print $2}' | awk -v FS=" " '{print $1}'`
+                echo $Kapazitaet;
+                if [ $(echo "$Kapazitaet > 10" | bc) -eq 1 ];
+                then
+                        Kapazitaet=$(echo "$Kapazitaet/10" | bc );
+                else
+                        Kapazitaet="1";
+                fi
 
                 if [ $ACTIVE == "ACTIVE" -a ! -e /srv/storage/backup/images/${datum}-${LVname}.img.gz ];
 	        then
