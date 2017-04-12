@@ -63,7 +63,7 @@ then
 
 	                echo "=> Image ${datum}-${LVname}.img.gz aus Snapshot ${LVname}_snap erstellen" >> ${TEMPLOGDATEI} 2>&1
 	                # Snapshot in ein Image schreiben und einpacken
-	                nice -n19 ionice -c3 /bin/gzip -c < ${VGname}/${LVname}_snap > /srv/storage/backup/images/${datum}-${LVname}.img.gz
+	                nice -n19 ionice -c3 /usr/bin/pigz -c < ${VGname}/${LVname}_snap > /srv/storage/backup/images/${datum}-${LVname}.img.gz
 	                sync
 	                sleep 3
 
