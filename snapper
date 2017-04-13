@@ -36,8 +36,8 @@ then
 
 	i=0
 
-	export $PASSPHRASE
-	export $FTP_PASSWORD
+	export PASSPHRASE=$PASSPHRASE
+	export FTP_PASSWORD=$FTP_PASSWORD
 	
 	echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
 	echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
@@ -107,9 +107,7 @@ then
 	        fi
 	done
 
-	echo "df"     | sftp ${FTP_USER}@${FTP_SERVER}
-	echo "df -h"  | sftp ${FTP_USER}@${FTP_SERVER}
-	echo "df -hi" | sftp ${FTP_USER}@${FTP_SERVER}
+    echo "du -sm . " | lftp -u ${FTP_USER},${FTP_PASSWORD} ${FTP_SERVER}
 
 	unset PASSPHRASE
 	unset FTP_PASSWORD
