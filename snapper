@@ -15,11 +15,18 @@ then
 
 	OIFS=$IFS
 
-	EXCLUDE_GREP="| grep -v 'Snapshot'"
-	for i in ${EXCLUDE_LVS[@]}; do
-	        EXCLUDE_GREP="$EXCLUDE_GREP | grep -v '$i'"
+	while getopts ':p:' OPTION ; do
+	  case "$OPTION" in
+	    p)  EXCLUDE_GREP="| grep '$OPTARG'";;
+	    *)   
+			EXCLUDE_GREP="| grep -v 'Snapshot'"
+			for i in ${EXCLUDE_LVS[@]}; do
+		        EXCLUDE_GREP="$EXCLUDE_GREP | grep -v '$i'"
+			done
+			;;
+	  esac
 	done
-
+	
 	lvscantext=`eval /sbin/lvscan $EXCLUDE_GREP`
 	datum="$(date +%Y-%m-%d)"
 	echo $datum > ${BACKUPPATH}lastbackup.txt
