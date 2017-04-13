@@ -29,6 +29,9 @@ then
 
 	i=0
 
+	export $PASSPHRASE
+	export $FTP_PASSWORD
+	
 	echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
 	echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
 	echo "----- BACKUP-JOB $datumzeit ------------" >> ${TEMPLOGDATEI} 2>&1
@@ -79,6 +82,7 @@ then
 	                sync
 	                sleep 1
 
+					
 	                echo "=> ${SAVETIME} alte Images vom FTP-Server entfernen" >> ${TEMPLOGDATEI} 2>&1
 	                # Loeschen aller Backups, die aelter als ${SAVETIME} sind
 	                $CMD_DUPLICITY remove-older-than ${SAVETIME} --force ftp://${FTP_USER}@${FTP_SERVER}/vm-images/${LVname} >> ${TEMPLOGDATEI} 2>&1
@@ -95,6 +99,13 @@ then
 	                echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
 	        fi
 	done
+
+	echo "df"     | sftp ${FTP_USER}@${FTP_SERVER}
+	echo "df -h"  | sftp ${FTP_USER}@${FTP_SERVER}
+	echo "df -hi" | sftp ${FTP_USER}@${FTP_SERVER}
+
+	unset PASSPHRASE
+	unset FTP_PASSWORD
 
 	echo "----- HDD-Use für einzelne Sicherung ------------" >> ${TEMPLOGDATEI} 2>&1
 
