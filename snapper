@@ -15,19 +15,24 @@ then
 
 	OIFS=$IFS
 
-	while getopts ':p:' OPTION ; do
+	unset $EXCLUDE_GREP;
+
+	while getopts ':l:' OPTION ; do
 	  case "$OPTION" in
-	    p)  EXCLUDE_GREP="| grep '$OPTARG'";;
-	    *)   
-			EXCLUDE_GREP="| grep -v 'Snapshot'"
-			for i in ${EXCLUDE_LVS[@]}; do
-		        EXCLUDE_GREP="$EXCLUDE_GREP | grep -v '$i'"
-			done
-			;;
+	    l)  EXCLUDE_GREP="| grep '$OPTARG' | grep -v '_snap'";;
 	  esac
 	done
-	
+
+	if [ -z "$EXCLUDE_GREP" ];
+	then
+                        EXCLUDE_GREP="| grep -v 'Snapshot'"
+                        for i in ${EXCLUDE_LVS[@]}; do
+                        EXCLUDE_GREP="$EXCLUDE_GREP | grep -v '$i'"
+                        done
+	fi
+	echo $EXCLUDE_GREP;
 	lvscantext=`eval /sbin/lvscan $EXCLUDE_GREP`
+	echo $lvscantext;
 	datum="$(date +%Y-%m-%d)"
 	echo $datum > ${BACKUPPATH}lastbackup.txt
 	datumzeit="$(date +%Y-%m-%d-%H-%M-%S)"
@@ -38,7 +43,7 @@ then
 
 	export PASSPHRASE=$PASSPHRASE
 	export FTP_PASSWORD=$FTP_PASSWORD
-	
+
 	echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
 	echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
 	echo "----- BACKUP-JOB $datumzeit ------------" >> ${TEMPLOGDATEI} 2>&1
@@ -83,19 +88,18 @@ then
 	                sync
 	                sleep 3
 
-	                echo "=> Snapshot ${LVname}_snap entfernen" >> ${TEMPLOGDATEI} 2>&1
-	                # Snapshot nach Imageerstellung wieder loeschen um Speicherplatz freizugeben
-	                /sbin/lvremove -f ${VGname}/${LVname}_snap > /dev/null
-	                sync
-	                sleep 1
-
-					
 	                echo "=> ${SAVETIME} alte Images vom FTP-Server entfernen" >> ${TEMPLOGDATEI} 2>&1
 	                # Loeschen aller Backups, die aelter als ${SAVETIME} sind
-	                $CMD_DUPLICITY remove-older-than ${SAVETIME} --force ftp://${FTP_USER}@${FTP_SERVER}/vm-images/${LVname} >> ${TEMPLOGDATEI} 2>&1
+	                $CMD_DUPLICITY remove-older-than ${SAVETIME} --force scp://${FTP_USER}@${FTP_SERVER}/vm-images/${LVname} >> ${TEMPLOGDATEI} 2>&1
 	                echo "=> aktuelles Image ${datum}-${LVname}.img.gz auf FTP-Server ablegen" >> ${TEMPLOGDATEI} 2>&1
 	                # Woechentliches Full-Backup und taegliches inkrementielles Backup
-	                $CMD_DUPLICITY full --volsize 500 ${BACKUPPATH}images/${datum}-${LVname}.img.gz ftp://${FTP_USER}@${FTP_SERVER}/vm-images/${LVname} >> ${TEMPLOGDATEI} 2>&1
+	                $CMD_DUPLICITY full --volsize 500 ${BACKUPPATH}images/${datum}-${LVname}.img.gz scp://${FTP_USER}@${FTP_SERVER}/vm-images/${LVname} >> ${TEMPLOGDATEI} 2>&1
+
+                        echo "=> Snapshot ${LVname}_snap entfernen" >> ${TEMPLOGDATEI} 2>&1
+                        # Snapshot nach Imageerstellung wieder loeschen um Speicherplatz freizugeben
+                        /sbin/lvremove -f ${VGname}/${LVname}_snap > /dev/null
+                        sync
+                        sleep 1
 
 	                if [ $? -ne 0 ]; then
 #	                        echo "ERROR eMail an $KONTAKTADRESSE geschickt" >> ${TEMPLOGDATEI} 2>&1
@@ -107,7 +111,10 @@ then
 	        fi
 	done
 
-    echo "du -sm . " | lftp -u ${FTP_USER},${FTP_PASSWORD} ${FTP_SERVER}
+        echo "du -sm . " | lftp -u ${FTP_USER},${FTP_PASSWORD} ${FTP_SERVER}
+#	echo "df"     | sftp ${FTP_USER}@${FTP_SERVER}
+#	echo "df -h"  | sftp ${FTP_USER}@${FTP_SERVER}
+#	echo "df -hi" | sftp ${FTP_USER}@${FTP_SERVER}
 
 	unset PASSPHRASE
 	unset FTP_PASSWORD
