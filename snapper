@@ -111,25 +111,28 @@ then
 	        fi
 	done
 
-        echo "du -sm . " | lftp -u ${FTP_USER},${FTP_PASSWORD} ${FTP_SERVER}
-#	echo "df"     | sftp ${FTP_USER}@${FTP_SERVER}
-#	echo "df -h"  | sftp ${FTP_USER}@${FTP_SERVER}
-#	echo "df -hi" | sftp ${FTP_USER}@${FTP_SERVER}
+        USEDSPACE=`echo "du -sm . " | lftp -u ${FTP_USER},${FTP_PASSWORD} ${FTP_SERVER} | awk -v FS=" " '{print $1}'`
+	USEDSPACE=$(echo "$USEDSPACE/1024" | bc);
+	FREESPACE=$(echo "$FTP_STORAGE-$USEDSPACE" | bc);
 
 	unset PASSPHRASE
 	unset FTP_PASSWORD
 
-	echo "----- HDD-Use für einzelne Sicherung ------------" >> ${TEMPLOGDATEI} 2>&1
+        echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
 
-	HDDuseINT=`du -s -B G /srv/storage/backup/images/ | awk -v FS=" " '{print $1}' | sed "s:G::g" | sed "s:M::" | sed "s:B::"`
-        HDDuseREAL=`du -sh /srv/storage/backup/images/ | awk -v FS=" " '{print $1}' | sed "s:G::g" | sed "s:M::" | sed "s:B::"`
-	if [ $HDDuseINT -ge  48 ]; then
-		echo " WARNUNG --- BACKUPS WERDEN ZU GROSS ($HDDuseREAL)" >> ${TEMPLOGDATEI} 2>&1
+	HDDuseINT=`du -s -B G ${BACKUPPATH}images/ | awk -v FS=" " '{print $1}' | sed "s:G::g" | sed "s:M::" | sed "s:B::"`
+        HDDuseREAL=`du -sh ${BACKUPPATH}images/ | awk -v FS=" " '{print $1}' | sed "s:G::g" | sed "s:M::" | sed "s:B::"`
+
+	POSSIBLE=$(echo "$FREESPACE/$HDDuseINT" | bc);
+
+	echo "used: ${USEDSPACE}GB; free: ${FREESPACE}GB; size: ${HDDuseINT}GB; space for $POSSIBLE additional full backup sets" >> ${TEMPLOGDATEI} 2>&1
+
+	if [ $POSSIBLE -lt $WARN_POSSIBLE  ]; then
+		echo " WARNUNG --- BACKUPS WERDEN ZU GROSS" >> ${TEMPLOGDATEI} 2>&1
 #		PROBLEM="true"
-                echo " WARNUNG --- BACKUPS WERDEN ZU GROSS ($HDDuseREAL)" | mail -s "Backups werden zu gross auf `hostname`!" $KONTAKTADRESSE
-	else
-		echo " $HDDuseREAL" >> ${TEMPLOGDATEI} 2>&1
+                echo -e " WARNUNG --- BACKUPS WERDEN ZU GROSS (`hostname`)\r\n\r\nused: ${USEDSPACE}GB; free: ${FREESPACE}GB; size: ${HDDuseINT}GB; only space for $POSSIBLE additional full backup sets\r\n\r\nWarning @ less or equal than $WARN_POSSIBLE additional full backup sets" | mail -s "Backups werden zu gross auf `hostname`!" $KONTAKTADRESSE
 	fi
+        echo "-------------------------------------------------" >> ${TEMPLOGDATEI} 2>&1
 	echo "----- DONE --------------------------------------" >> ${TEMPLOGDATEI} 2>&1
 
 	if [ $PROBLEM != "true" ]; then
